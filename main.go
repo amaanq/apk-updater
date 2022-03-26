@@ -1,9 +1,17 @@
 package main
 
-import "github.com/amaanq/apk-updater/apk"
+import (
+	"github.com/amaanq/apk-updater/apk"
+	"github.com/joho/godotenv"
+)
 
 func main() {
-	if err := apk.CheckForNewVersion(); err != nil {
-		panic(err)
+	err := godotenv.Load(".env")
+	if err != nil {
+		apk.Log.Fatal(err)
+	}
+
+	if err := apk.UpdateAPK(); err != nil {
+		apk.Log.Fatal(err)
 	}
 }
