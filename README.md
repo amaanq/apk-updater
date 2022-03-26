@@ -1,4 +1,4 @@
-# **A Go package to automatically update your game**
+# **A Go package to automatically update your game files!**
 <br/>
 
 ## **Installation**
