@@ -16,4 +16,4 @@ go run .
 ## **You also need to make a file in the same directory as your executable called .env and set game="14.426.3"**
 <br />
 
-## Note: The dotenv is set to 14.426.3 on purpose. At the time of writing, 14.426.4 is the most recent version of coc and so the program won't attempt to fetch the newest APK
+## Note: The dotenv is set to 14.426.3 on purpose. At the time of writing, 14.426.4 is the most recent version of coc and so the program won't attempt to fetch the newest APK if the .env game matches
