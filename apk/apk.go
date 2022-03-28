@@ -167,7 +167,7 @@ func WalkAndDecompressAssets() error {
 			if err = fd.Close(); err != nil {
 				return err
 			}
-		} 
+		}
 	}
 	return nil
 }
@@ -268,5 +268,6 @@ func WgetAPK(url, version string) error {
 	}
 
 	_, err = fd.Write(resp.Body())
+	fd.Close()
 	return err
 }
