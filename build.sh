@@ -46,3 +46,4 @@ do
 		exit 1
 	fi
 done
+zip -9 executables.zip apk-updater-*
