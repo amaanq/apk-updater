@@ -13,16 +13,24 @@ import (
 )
 
 type GameLink struct {
-	URL  string
-	Name string
+	URL              string
+	Name             string
+	ValidDirectories []string
+}
+
+type VersionData struct {
+	Version     string
+	URL         string
+	Date        string
+	DownloadURL string
 }
 
 var (
-	ClashofClans = GameLink{URL: "https://clash-of-clans.en.uptodown.com/android/versions/%d", Name: "Clash of Clans"}
+	ClashofClans = GameLink{URL: "https://clash-of-clans.en.uptodown.com/android/versions/%d", Name: "Clash of Clans", ValidDirectories: []string{"csv", "localization", "logic"}}
 	ClashRoyale  = GameLink{URL: "https://clash-royale.en.uptodown.com/android/versions/%d", Name: "Clash Royale"}
-	BrawlStars   = GameLink{URL: "https://brawl-stars.en.uptodown.com/android/versions/%d", Name: "Brawl Stars"}
+	BrawlStars   = GameLink{URL: "https://brawl-stars.en.uptodown.com/android/versions/%d", Name: "Brawl Stars", ValidDirectories: []string{"csv_client", "csv_logic", "localization", "logic"}}
 	ClashMini    = GameLink{URL: "https://clash-mini.en.uptodown.com/android/versions/%d", Name: "Clash Mini"}
-	HayDay       = GameLink{URL: "https://hay-day.en.uptodown.com/android/versions/%d", Name: "Hay Day"}
+	HayDay       = GameLink{URL: "https://hay-day.en.uptodown.com/android/versions/%d", Name: "Hay Day", ValidDirectories: []string{"data", "localization"}}
 	ClashQuest   = GameLink{URL: "https://clash-quest.en.uptodown.com/android/versions/%d", Name: "Clash Quest"}
 	BoomBeach    = GameLink{URL: "https://boom-beach.en.uptodown.com/android/versions/%d", Name: "Boom Beach"}
 	Everdale     = GameLink{URL: "https://everdale.en.uptodown.com/android/versions/%d", Name: "Everdale"}
@@ -133,11 +141,4 @@ func GetVersions(gamelink string, page int) ([]VersionData, error) {
 		}
 	})
 	return vers, nil
-}
-
-type VersionData struct {
-	Version     string
-	URL         string
-	Date        string
-	DownloadURL string
 }

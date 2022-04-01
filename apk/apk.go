@@ -14,10 +14,12 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/amaanq/sc-compression"
@@ -28,15 +30,9 @@ import (
 
 var (
 	CurrentVersion string
-
-	Path = flag.String("path", ".", "output directory for /assets")
-
-	//Client = http.Client{Timeout: time.Second * 15}
-	Client = LoadRetryClient()
-
-	Log = log.New(os.Stdout).WithColor().WithDebug().WithTimestamp()
-
-	ValidDirectories = []string{"csv", "localization", "logic" /*"sc"*/} // Uncomment sc if you have a lot of RAM (>8GB or >4GB free)
+	Path           = flag.String("path", ".", "output directory for /assets")
+	Client         = LoadRetryClient()
+	Log            = log.New(os.Stdout).WithColor().WithDebug().WithTimestamp()
 )
 
 func LoadRetryClient() *retryablehttp.Client {
@@ -46,13 +42,6 @@ func LoadRetryClient() *retryablehttp.Client {
 	return Client
 }
 
-func LoadCurrentVersion() {
-	CurrentVersion = os.Getenv("game")
-	if CurrentVersion == "" {
-		panic("Please set game to the game version you'd like to view the decompressed assets of; if you haven't moved dotenv to .env please do so.")
-	}
-}
-
 func FixPath() {
 	if !strings.HasSuffix(*Path, "/") {
 		*Path += "/"
@@ -60,8 +49,6 @@ func FixPath() {
 }
 
 func UpdateAPK() error {
-	LoadCurrentVersion()
-
 	version, err := GetCurrentAPKVersion(true)
 	if err != nil {
 		Log.Error(err)
@@ -97,14 +84,8 @@ func UpdateAPK() error {
 	Log.Info("Removing Potential Assets Path Collision")
 	os.RemoveAll(*Path + "/assets" + CurrentVersion)
 
-	Log.Info("Moving assets folder outside...")
-	if err = ExtractAssets("clash-"+version, ""); err != nil {
-		Log.Error(err)
-		return err
-	}
-
 	Log.Info("Decompressing assets...")
-	if err = WalkAndDecompressAssets("clash-"+version, "decompressed"+version); err != nil {
+	if _, err = WalkAndDecompressAssets(ClashofClans.ValidDirectories, "clash-"+version, "decompressed"+version); err != nil {
 		Log.Error(err)
 		return err
 	}
@@ -115,28 +96,25 @@ func UpdateAPK() error {
 }
 
 // Walk the assets folder and decompress each file inside
-func WalkAndDecompressAssets(fpToDecompiledAPK, fpToOutputFiles string) error {
+func WalkAndDecompressAssets(validDirs []string, fpToDecompiledAPK, fpToOutputFiles string) (string, error) {
 	os.RemoveAll(fpToOutputFiles)
 	err := os.Mkdir(fpToOutputFiles, 0755)
-	if err != nil {
-		return err
+	if err != nil && !os.IsExist(err) {
+		Log.Error(fpToOutputFiles)
+		Log.Error(err)
+		return "", err
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	for _, subdir := range ValidDirectories {
-		Log.Info("Reading dir", subdir)
+	for _, subdir := range validDirs {
 		entries, err := os.ReadDir("./" + fpToDecompiledAPK + "/assets/" + subdir + "/")
 		if err != nil {
-			return err
+			continue
 		}
 
 		err = os.Mkdir(fpToOutputFiles+"/"+subdir, 0755)
-		if err != nil {
-			return err
+		if err != nil && !os.IsExist(err) {
+			Log.Error(err)
+			return "", err
 		}
 
 		for _, entry := range entries {
@@ -144,31 +122,37 @@ func WalkAndDecompressAssets(fpToDecompiledAPK, fpToOutputFiles string) error {
 				continue
 			}
 			fileName := entry.Name()
-			fullPath := cwd + "/" + fpToOutputFiles + "/" + fileName
-			Log.Info("Decompressing", fullPath)
+			fullPath := "./" + fpToDecompiledAPK + "/assets/" + subdir + "/" + fileName
+			t := time.Now()
+			year, month, day := t.Date()
+			hour, min, sec := t.Clock()
+			date := fmt.Sprintf("%d/%02d/%02d %02d:%02d:%02d", year, month, day, hour, min, sec)
+			fmt.Printf("\033[2K\r\033[0;32m[INFO] \033[0;34m %s \033[0mDecompressing %s", date, fullPath)
 			compFile, err := os.Open(fullPath)
 			if err != nil {
-				return err
+				return "", err
 			}
 			decompressor := ScCompression.NewDecompressor(compFile)
 			reader, err := decompressor.Decompress()
 			if err != nil {
-				return err
+				Log.Errorf("Failed to decompress %s: %s\n", fullPath, err)
+				continue
 			}
 
 			fd, err := os.Create(fpToOutputFiles + "/" + subdir + "/" + fileName)
 			if err != nil {
-				return err
+				return "", err
 			}
 			if _, err = io.Copy(fd, reader); err != nil {
-				return err
+				return "", err
 			}
 			if err = fd.Close(); err != nil {
-				return err
+				return "", err
 			}
 		}
 	}
-	return nil
+	fmt.Printf("\n")
+	return fpToOutputFiles, nil
 }
 
 // Parses the uptodown HTML node for the current game version
@@ -227,33 +211,7 @@ func DecompileAPK(apkPath string) error {
 	if err != nil {
 		return err
 	}
-
-	err = os.RemoveAll(apkPath)
 	return err
-}
-
-// Moves assets folder inside apk to project root directory
-func ExtractAssets(gamepath, assetpath string) error {
-
-	// var err error
-	// if *Path == "." {
-	// 	__path := "./assets" + CurrentVersion
-	// 	os.RemoveAll(__path)
-	// 	Log.Infof("Moving %s to %s", path+"/assets", __path)
-	// 	err = cp.Copy(path+"/assets", __path)
-	// } else {
-	// 	__path := *Path + "/assets" + CurrentVersion
-	// 	os.RemoveAll(__path)
-	// 	err = cp.Copy(path+"/assets", __path)
-	// }
-
-	// if err != nil {
-	// 	return err
-	// }
-
-	// err = os.RemoveAll(path)
-	// return err
-	return nil
 }
 
 // Get uptodowns HTML page
@@ -296,4 +254,22 @@ func WgetAPK(game *GameLink, downloadUrl, version, fp string) (string, error) {
 	_, err = __fd.Write(bytes)
 	__fd.Close()
 	return fp, err
+}
+
+func CleanUp(assetsFP, apkFP string) error {
+	outerFP := strings.Split(assetsFP, "/")
+	outFP := outerFP[len(outerFP)-1]
+	err := os.Rename(assetsFP, "./"+outFP)
+	if err != nil {
+		return err
+	}
+	err = os.RemoveAll(outerFP[0])
+	if err != nil {
+		return err
+	}
+	err = os.RemoveAll(apkFP)
+	if err != nil {
+		return err
+	}
+	return nil
 }

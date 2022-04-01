@@ -12,6 +12,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"sort"
 	"strconv"
@@ -29,22 +30,22 @@ var outputDecompressFP string
 // decompressCmd represents the decompress command
 var decompressCmd = &cobra.Command{
 	Use:   "decompress",
-	Short: "Decompress an already existing apk or assets directory",
-	Long: `This is to be used if you already have an APK downloaded, and want to simply decompress it. 
+	Short: "Decompress an APK",
+	Long: `Decompress works in 3 ways:
 
-Set the APK file path using the -f flag.`,
+1. Simply run decompress with no flags and follow the terminal prompts. The apk will be automatically downloaded and parsed for you.
+
+2. Run decompress with the -f flag. This will decompress the APK file specified by the -f flag.
+
+3. Run decompress with the -d flag. This will decompress the assets folder of an already DECOMPILED APK specified by the -d flag.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if inputDecompressFP != "" && inputAssetsFP != "" {
 			return errors.New("cannot specify both -f and -d")
 		}
 
-		if outputDecompressFP == "" {
-			outputDecompressFP = "decompressed"
-		}
-
 		switch {
 		case inputDecompressFP == "" && inputAssetsFP == "": // Default case
-			game, err := selectGame() // Have user pick a game
+			game, err := selectGame("Which game do you want to download and decompress") // Have user pick a game
 			if err != nil {
 				return err
 			}
@@ -76,31 +77,57 @@ Set the APK file path using the -f flag.`,
 			}
 
 			_bool := askToOnlyStoreAssets()
-			apk.Log.Debug("Storing Assets:", _bool)
+
+			_sc := askToDecompressDotSCFiles()
+			if _sc {
+				game.ValidDirectories = append(game.ValidDirectories, "sc")
+			} else {
+				apk.Log.Info("Not decompressing .sc files")
+			}
 
 			apk.Log.Infof("Downloading %s APK Version %s (Released on %s)\n", game.Name, version.Version, version.Date)
-			fp, err := apk.WgetAPK(game, version.DownloadURL, version.Version, "") // Download the apk to name-version.apk, return stored file path
+			fp, err := apk.WgetAPK(game, version.DownloadURL, version.Version, "") // Download the apk to name-version.apk, return stored file path .apk
 			if err != nil {
 				return err
 			}
 
-			apk.Log.Info("FP: ", fp)
-			err = apk.DecompileAPK(fp) // Decompile this apk from file path above
+			err = apk.DecompileAPK(fp) // Decompile this apk from file path above (same path as apk without .apk)
 			if err != nil {
 				return err
 			}
 
-			// if err = apk.ExtractAssets("clash-" + version.Version); err != nil {
-			// 	apk.Log.Error(err)
-			// 	return err
-			// }
-			// apk.Log.Info("FP: ", fp)
-			// inputAssetsFP = strings.TrimSuffix(fp, ".apk")
-			// apk.Log.Info("Input Assets FP: ", inputAssetsFP, "output decompress FP: ", outputDecompressFP)
-			// outputDecompressFP = "decompressed" + version.Version
-			return apk.WalkAndDecompressAssets(".", outputDecompressFP)
+			if outputDecompressFP == "" {
+				outputDecompressFP = defaultAssetOutputFolder(game, version)
+			}
+
+			if strings.TrimSuffix(fp, ".apk") == outputDecompressFP { // in case they're matching directories
+				outputDecompressFP += "/decompressed"
+			}
+			assetsFP, err := apk.WalkAndDecompressAssets(game.ValidDirectories, strings.TrimSuffix(fp, ".apk"), outputDecompressFP)
+			if err != nil {
+				return err
+			}
+
+			if _bool {
+				apk.CleanUp(assetsFP, fp)
+				assetsFP = "decompressed"
+			}
+			apk.Log.Infof("Done! Decompressed assets stored in ./%s\n", assetsFP)
 		case inputDecompressFP != "":
-			_, err := os.Stat(inputDecompressFP)
+			game, err := selectGame("What game is this (needed for knowing what folders to parse..)") // Have user pick a game
+			if err != nil {
+				return err
+			}
+
+			// query for bool
+			_bool := askToOnlyStoreAssets()
+
+			_sc := askToDecompressDotSCFiles()
+			if _sc {
+				game.ValidDirectories = append(game.ValidDirectories, "sc")
+			}
+
+			_, err = os.Stat(inputDecompressFP)
 			if errors.Is(err, os.ErrNotExist) {
 				return errors.New("Given APK File does not exist!")
 			}
@@ -116,22 +143,53 @@ Set the APK file path using the -f flag.`,
 				return err
 			}
 			inputAssetsFP = strings.TrimSuffix(inputDecompressFP, ".apk")
-			return apk.WalkAndDecompressAssets(inputAssetsFP, outputDecompressFP)
+
+			if outputDecompressFP == "" {
+				outputDecompressFP = strings.TrimSuffix(inputDecompressFP, ".apk") + "-decompressed"
+			}
+
+			assetsFP, err := apk.WalkAndDecompressAssets(game.ValidDirectories, inputAssetsFP, outputDecompressFP)
+			if err != nil {
+				return err
+			}
+			apk.Log.Infof("Assets stored in %s\n", assetsFP)
+			if _bool {
+				apk.CleanUp(assetsFP, inputDecompressFP)
+			}
 		case inputAssetsFP != "":
-			_, err := os.Stat(inputAssetsFP)
+			game, err := selectGame("What game is this (needed for knowing what folders to parse..)") // Have user pick a game
+			if err != nil {
+				return err
+			}
+
+			_bool := askToOnlyStoreAssets()
+
+			_sc := askToDecompressDotSCFiles()
+			if _sc {
+				game.ValidDirectories = append(game.ValidDirectories, "sc")
+			}
+
+			_, err = os.Stat(inputAssetsFP)
 			if errors.Is(err, os.ErrNotExist) {
 				return errors.New("Given Assets Path does not exist!")
 			}
 			if err != nil {
 				return err
 			}
-			return apk.WalkAndDecompressAssets(inputAssetsFP, outputDecompressFP)
+			assetsFP, err := apk.WalkAndDecompressAssets(game.ValidDirectories, inputAssetsFP, outputDecompressFP)
+			if err != nil {
+				return err
+			}
+			apk.Log.Infof("Assets stored in %s\n", assetsFP)
+			if _bool {
+				apk.CleanUp(assetsFP, inputAssetsFP)
+			}
 		}
 		return nil
 	},
 }
 
-func selectGame() (*apk.GameLink, error) {
+func selectGame(_prompt string) (*apk.GameLink, error) {
 	templates := &promptui.SelectTemplates{
 		Label: "		{{ . }}?",
 		Active: "		     ↳ {{ .Name | cyan }}",
@@ -142,7 +200,7 @@ func selectGame() (*apk.GameLink, error) {
 			{{ "Name:" | faint }}	{{ .Name }}`,
 	}
 	prompt := promptui.Select{
-		Label:     "Which game do you want to download and decompress",
+		Label:     _prompt,
 		Items:     apk.AllGameLinks,
 		Templates: templates,
 		Size:      10,
@@ -180,7 +238,7 @@ func selectVersion(versions []apk.VersionData) (*apk.VersionData, error) {
 
 func askToOnlyStoreAssets() bool {
 	prompt := promptui.Prompt{
-		Label:     "Do you want to only store the assets folder?",
+		Label:     "Do you want to clean up all files but the decompress ones?",
 		IsConfirm: true,
 	}
 	result, err := prompt.Run()
@@ -188,6 +246,22 @@ func askToOnlyStoreAssets() bool {
 		return false
 	}
 	return result == "y" || result == "Y"
+}
+
+func askToDecompressDotSCFiles() bool {
+	prompt := promptui.Prompt{
+		Label:     "Do you want to decompress .sc files NOTE: This uses a LOT of memory, >=8GB of RAM is recommended?",
+		IsConfirm: true,
+	}
+	result, err := prompt.Run()
+	if err != nil {
+		return false
+	}
+	return result == "y" || result == "Y"
+}
+
+func defaultAssetOutputFolder(game *apk.GameLink, version *apk.VersionData) string {
+	return fmt.Sprintf("%s-%s", strings.ToLower(strings.ReplaceAll(game.Name, " ", "")), version.Version)
 }
 
 func init() {
