@@ -1,7 +1,7 @@
 // Copyright (C) 2022 Amaan Qureshi (aq0527@pm.me)
 //
 //
-// This file is part of APK Updater.
+// This file is a part of APK Updater.
 //
 //
 // This project, APK Updater, is not to be redistributed or copied without
@@ -21,14 +21,9 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/amaanq/sc-compression"
-	"github.com/go-resty/resty/v2"
-	cp "github.com/otiai10/copy"
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/withmandala/go-log"
 	"golang.org/x/net/html"
-)
-
-const (
-	BaseURL = "https://clash-of-clans.en.uptodown.com/android/download"
 )
 
 var (
@@ -36,11 +31,20 @@ var (
 
 	Path = flag.String("path", ".", "output directory for /assets")
 
-	Client = resty.New()
-	Log    = log.New(os.Stdout).WithColor().WithDebug().WithTimestamp()
+	//Client = http.Client{Timeout: time.Second * 15}
+	Client = LoadRetryClient()
+
+	Log = log.New(os.Stdout).WithColor().WithDebug().WithTimestamp()
 
 	ValidDirectories = []string{"csv", "localization", "logic" /*"sc"*/} // Uncomment sc if you have a lot of RAM (>8GB or >4GB free)
 )
+
+func LoadRetryClient() *retryablehttp.Client {
+	Client := retryablehttp.NewClient()
+	Client.Logger = nil
+	Client.RetryMax = 5
+	return Client
+}
 
 func LoadCurrentVersion() {
 	CurrentVersion = os.Getenv("game")
@@ -58,13 +62,7 @@ func FixPath() {
 func UpdateAPK() error {
 	LoadCurrentVersion()
 
-	node, err := CurlAPKLink()
-	if err != nil {
-		Log.Error(err)
-	}
-
-	Log.Info("Checking version...")
-	version, err := GetAPKVersion(node)
+	version, err := GetCurrentAPKVersion(true)
 	if err != nil {
 		Log.Error(err)
 		return err
@@ -77,14 +75,13 @@ func UpdateAPK() error {
 	CurrentVersion = version
 
 	Log.Info("New game version available! (" + version + ")")
-	url, err := GetDownloadURL(node)
+	url, err := GetDownloadURL(ClashofClans.URL)
 	if err != nil {
 		Log.Error(err)
 		return err
 	}
 
-	Log.Info("Downloading APK!")
-	if err = WgetAPK(url, version); err != nil {
+	if _, err = WgetAPK(&ClashofClans, url, version, ""); err != nil {
 		Log.Error(err)
 		return err
 	}
@@ -92,7 +89,6 @@ func UpdateAPK() error {
 	Log.Info("Removing Potential Base Path Collision")
 	os.RemoveAll("clash-" + version)
 
-	Log.Info("Decompiling APK!")
 	if err = DecompileAPK("clash-" + version + ".apk"); err != nil {
 		Log.Error(err)
 		return err
@@ -102,13 +98,13 @@ func UpdateAPK() error {
 	os.RemoveAll(*Path + "/assets" + CurrentVersion)
 
 	Log.Info("Moving assets folder outside...")
-	if err = ExtractAssets("clash-" + version); err != nil {
+	if err = ExtractAssets("clash-"+version, ""); err != nil {
 		Log.Error(err)
 		return err
 	}
 
 	Log.Info("Decompressing assets...")
-	if err = WalkAndDecompressAssets(); err != nil {
+	if err = WalkAndDecompressAssets("clash-"+version, "decompressed"+version); err != nil {
 		Log.Error(err)
 		return err
 	}
@@ -119,48 +115,51 @@ func UpdateAPK() error {
 }
 
 // Walk the assets folder and decompress each file inside
-func WalkAndDecompressAssets() error {
-	// Create new dir for decompressed assets
-	os.RemoveAll("decompressed" + CurrentVersion)
-	err := os.Mkdir("decompressed"+CurrentVersion, 0775)
+func WalkAndDecompressAssets(fpToDecompiledAPK, fpToOutputFiles string) error {
+	os.RemoveAll(fpToOutputFiles)
+	err := os.Mkdir(fpToOutputFiles, 0755)
+	if err != nil {
+		return err
+	}
+
+	cwd, err := os.Getwd()
 	if err != nil {
 		return err
 	}
 
 	for _, subdir := range ValidDirectories {
-		dir := *Path + "/assets" + CurrentVersion + "/" + subdir + "/"
-		Log.Info("Reading dir", dir)
-		entries, err := os.ReadDir(dir)
+		Log.Info("Reading dir", subdir)
+		entries, err := os.ReadDir("./" + fpToDecompiledAPK + "/assets/" + subdir + "/")
 		if err != nil {
 			return err
 		}
 
-		err = os.Mkdir("decompressed"+CurrentVersion+"/"+subdir, 0775)
+		err = os.Mkdir(fpToOutputFiles+"/"+subdir, 0755)
 		if err != nil {
 			return err
 		}
 
 		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
 			fileName := entry.Name()
-			fullPath := dir + fileName
-
+			fullPath := cwd + "/" + fpToOutputFiles + "/" + fileName
 			Log.Info("Decompressing", fullPath)
 			compFile, err := os.Open(fullPath)
 			if err != nil {
 				return err
 			}
-
 			decompressor := ScCompression.NewDecompressor(compFile)
 			reader, err := decompressor.Decompress()
 			if err != nil {
 				return err
 			}
 
-			fd, err := os.Create("./decompressed" + CurrentVersion + "/" + subdir + "/" + fileName)
+			fd, err := os.Create(fpToOutputFiles + "/" + subdir + "/" + fileName)
 			if err != nil {
 				return err
 			}
-
 			if _, err = io.Copy(fd, reader); err != nil {
 				return err
 			}
@@ -173,7 +172,15 @@ func WalkAndDecompressAssets() error {
 }
 
 // Parses the uptodown HTML node for the current game version
-func GetAPKVersion(node *html.Node) (string, error) {
+func GetCurrentAPKVersion(_print bool) (string, error) {
+	if _print {
+		Log.Info("Checking version...")
+	}
+	node, err := CurlAPKLink(ClashofClans.URL)
+	if err != nil {
+		Log.Error(err)
+	}
+
 	query := goquery.NewDocumentFromNode(node)
 	var version string
 	query.Find(`script[type="application/ld+json"]`).Each(func(i int, script *goquery.Selection) {
@@ -193,24 +200,30 @@ func GetAPKVersion(node *html.Node) (string, error) {
 }
 
 // Parses the uptodown HTML node for the download link
-func GetDownloadURL(node *html.Node) (string, error) {
+func GetDownloadURL(url string) (string, error) {
+	node, err := CurlAPKLink(url)
+	if err != nil {
+		Log.Error(err)
+	}
+
 	query := goquery.NewDocumentFromNode(node)
-	var url string
+	var downloadUrl string
 	query.Find("a.button.download").Each(func(i int, s *goquery.Selection) {
 		n, ok := s.Attr("href")
 		if ok {
-			url = n
+			downloadUrl = n
 		}
 	})
-	if url == "" {
-		return url, errors.New("couldn't find the version")
+	if downloadUrl == "" {
+		return downloadUrl, errors.New("couldn't find the version")
 	}
-	return url, nil
+	return downloadUrl, nil
 }
 
 // Executes apktool and removes the apk file
 func DecompileAPK(apkPath string) error {
-	err := exec.Command("apktool", "d", apkPath).Run()
+	Log.Info("Decompiling APK!")
+	err := exec.Command("apktool", "d", apkPath, "-f").Run()
 	if err != nil {
 		return err
 	}
@@ -220,35 +233,38 @@ func DecompileAPK(apkPath string) error {
 }
 
 // Moves assets folder inside apk to project root directory
-func ExtractAssets(path string) error {
-	var err error
-	if *Path == "." {
-		__path := "./assets" + CurrentVersion
-		os.RemoveAll(__path)
-		Log.Infof("Moving %s to %s", path+"/assets", __path)
-		err = cp.Copy(path+"/assets", __path)
-	} else {
-		__path := *Path + "/assets" + CurrentVersion
-		os.RemoveAll(__path)
-		err = cp.Copy(path+"/assets", __path)
-	}
+func ExtractAssets(gamepath, assetpath string) error {
 
-	if err != nil {
-		return err
-	}
+	// var err error
+	// if *Path == "." {
+	// 	__path := "./assets" + CurrentVersion
+	// 	os.RemoveAll(__path)
+	// 	Log.Infof("Moving %s to %s", path+"/assets", __path)
+	// 	err = cp.Copy(path+"/assets", __path)
+	// } else {
+	// 	__path := *Path + "/assets" + CurrentVersion
+	// 	os.RemoveAll(__path)
+	// 	err = cp.Copy(path+"/assets", __path)
+	// }
 
-	err = os.RemoveAll(path)
-	return err
+	// if err != nil {
+	// 	return err
+	// }
+
+	// err = os.RemoveAll(path)
+	// return err
+	return nil
 }
 
 // Get uptodowns HTML page
-func CurlAPKLink() (*html.Node, error) {
-	resp, err := Client.R().Get(BaseURL)
+func CurlAPKLink(link string) (*html.Node, error) {
+	resp, err := Client.Get(link)
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 
-	doc, err := html.Parse(strings.NewReader(string(resp.Body())))
+	doc, err := html.Parse(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -256,18 +272,28 @@ func CurlAPKLink() (*html.Node, error) {
 }
 
 // Download the APK from uptodown
-func WgetAPK(url, version string) error {
-	resp, err := Client.R().Get(url)
+func WgetAPK(game *GameLink, downloadUrl, version, fp string) (string, error) {
+	resp, err := Client.Get(downloadUrl)
 	if err != nil {
-		return err
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if fp == "" {
+		fp = strings.ToLower(strings.ReplaceAll(game.Name, " ", "")) + "-" + version + ".apk" // clashofclans-14.426.4.apk
 	}
 
-	fd, err := os.Create("clash-" + version + ".apk")
+	__fd, err := os.Create(fp)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	_, err = fd.Write(resp.Body())
-	fd.Close()
-	return err
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	_, err = __fd.Write(bytes)
+	__fd.Close()
+	return fp, err
 }
