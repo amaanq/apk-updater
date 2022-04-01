@@ -23,3 +23,4 @@ go run .
 
 ./apk-updater download # download just the apk alone for whatever you want
 ```
+![Decompression](https://i.imgur.com/U2TMpH1.gif)
