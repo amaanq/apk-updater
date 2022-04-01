@@ -11,6 +11,7 @@ require (
 )
 
 require (
+	github.com/Andrew4d3/go-csv2json v0.0.0-20200607002551-d56cb4088a54 // indirect
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
