@@ -11,6 +11,8 @@ the express permission of the copyright holder, Amaan Qureshi (amaanq).
 package cmd
 
 import (
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/amaanq/apk-updater/apk"
@@ -30,14 +32,43 @@ var downloadCmd = &cobra.Command{
 			apk.Log.Warnf("The given output file path (%s) does not end in .apk, this can cause issues down the road...", outputDownloadFP)
 		}
 
-		url, err := apk.GetDownloadURL(apk.ClashofClans.URL)
+		game, err := selectGame("Which game do you want to download and decompress") // Have user pick a game
 		if err != nil {
 			return err
 		}
 
-		if _, err := apk.WgetAPK(&apk.ClashofClans, url, desiredVersion, outputDownloadFP); err != nil {
+		versions, err := apk.GetAllVersions(game.URL) // Get game versions
+		if err != nil {
 			return err
 		}
+
+		sort.SliceStable(versions, func(i, j int) bool { // Sort by order
+			n_i_nums := strings.Split(versions[i].Version, ".")
+			n_j_nums := strings.Split(versions[j].Version, ".")
+			n_i, _ := strconv.Atoi(n_i_nums[0])
+			n_j, _ := strconv.Atoi(n_j_nums[0])
+			if n_i == n_j && len(n_i_nums) >= 2 && len(n_j_nums) >= 2 { // If both versions are of the same major version, but not the same minor version
+				n_i, _ = strconv.Atoi(n_i_nums[1])
+				n_j, _ = strconv.Atoi(n_j_nums[1])
+				if n_i == n_j && len(n_i_nums) >= 3 && len(n_j_nums) >= 3 { // If both versions are of the same major version, minor version, but not build version
+					n_i, _ = strconv.Atoi(n_i_nums[2])
+					n_j, _ = strconv.Atoi(n_j_nums[2])
+				}
+			}
+			return n_i > n_j
+		})
+
+		version, err := selectVersion(versions) // Have user pick a version
+		if err != nil {
+			return err
+		}
+
+		apk.Log.Infof("Downloading %s APK Version %s (Released on %s)\n", game.Name, version.Version, version.Date)
+		_, err = apk.WgetAPK(game, version.DownloadURL, version.Version, outputDownloadFP) // Download the apk
+		if err != nil {
+			return err
+		}
+		apk.Log.Infof("Downloaded %s-%s.apk Successfully!", strings.ToLower(strings.ReplaceAll(game.Name, " ", "")), version.Version)
 		return nil
 	},
 }

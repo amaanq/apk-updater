@@ -1,0 +1,20 @@
+# content in folders/large files 
+*.csv
+*.apk
+*.zip
+
+# large folders
+assets*/
+decompressed*/
+clash*/
+brawl*/
+hayday*/
+rush*/
+boom*/
+everdale*/
+
+# binaries 
+apk-updater*
+
+# .env
+.env
