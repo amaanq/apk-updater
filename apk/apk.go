@@ -28,6 +28,18 @@ import (
 	"golang.org/x/net/html"
 )
 
+type WgetReader struct {
+	io.Reader
+	Length   int64
+	Reporter func(r int64)
+}
+
+func (wg *WgetReader) Read(p []byte) (n int, err error) {
+	n, err = wg.Reader.Read(p)
+	wg.Reporter(int64(n))
+	return
+}
+
 var (
 	CurrentVersion string
 	Path           = flag.String("path", ".", "output directory for /assets")
@@ -40,12 +52,6 @@ func LoadRetryClient() *retryablehttp.Client {
 	Client.Logger = nil
 	Client.RetryMax = 5
 	return Client
-}
-
-func FixPath() {
-	if !strings.HasSuffix(*Path, "/") {
-		*Path += "/"
-	}
 }
 
 func UpdateAPK() error {
@@ -229,9 +235,22 @@ func CurlAPKLink(link string) (*html.Node, error) {
 	return doc, err
 }
 
-// Download the APK from uptodown
+// Download the APK from uptodown with a progress bar
 func WgetAPK(game *GameLink, downloadUrl, version, fp string) (string, error) {
-	resp, err := Client.Get(downloadUrl)
+	req, err := retryablehttp.NewRequest("GET", downloadUrl, nil)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9")
+	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Connection", "keep-alive")
+	req.Header.Set("Cookie", "uptodown_next=24430")
+	req.Header.Set("Host", "dw89.uptodown.com")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:98.0) Gecko/20100101 Firefox/98.0")
+
+	resp, err := Client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -246,12 +265,26 @@ func WgetAPK(game *GameLink, downloadUrl, version, fp string) (string, error) {
 		return "", err
 	}
 
-	bytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
+	total := int64(0)
+	speed := 0.0
+	start := time.Now()
+	pr := &WgetReader{resp.Body, resp.ContentLength, func(r int64) {
+		total += r
+		percent := float64(total) / float64(resp.ContentLength) * 100
+		t := time.Now()
+		year, month, day := t.Date()
+		hour, min, sec := t.Clock()
+		date := fmt.Sprintf("%d/%02d/%02d %02d:%02d:%02d", year, month, day, hour, min, sec)
+		speed = float64(total) / float64(time.Since(start).Milliseconds()) / 125 / 8
+		if r > 0 && percent != 100.00 {
+			fmt.Printf("\033[2K\r\033[0;32m[INFO] \033[0;34m %s \033[0m%.2f%% %.2f mb/s", date, percent, speed)
+		} else {
+			fmt.Printf("\033[2K\r\033[0;32m[INFO] \033[0;34m %s \033[0m100%% %.2f mb/s took %.2f seconds", date, speed, time.Since(start).Seconds())
+		}
+	}}
 
-	_, err = __fd.Write(bytes)
+	io.Copy(__fd, pr)
+	fmt.Printf("\n")
 	__fd.Close()
 	return fp, err
 }
