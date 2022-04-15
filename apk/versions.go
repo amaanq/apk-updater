@@ -59,31 +59,32 @@ func GetAllVersions(gamelink string) ([]VersionData, error) {
 	keepGoing := true
 	versions := make([]VersionData, 0)
 	for {
-		if keepGoing {
-			time.Sleep(time.Millisecond * 100)
-			wg.Add(1)
-			go func(page int) {
-				defer wg.Done()
-				vers, err := GetVersions(gamelink, page)
-				if err != nil && err != ErrLastPage {
-					Log.Error(err)
-					keepGoing = false
-				}
-				if err == ErrLastPage {
-					keepGoing = false
-				}
-				versions = append(versions, vers...)
-			}(page)
-			page++
-		} else {
+		if !keepGoing {
 			break
 		}
+
+		time.Sleep(time.Millisecond * 100)
+		wg.Add(1)
+		go func(page int) {
+			defer wg.Done()
+			vers, err := GetVersions(gamelink, page)
+			if err != nil && err != ErrLastPage {
+				Log.Error(err)
+				keepGoing = false
+			}
+			if err == ErrLastPage {
+				keepGoing = false
+			}
+			versions = append(versions, vers...)
+		}(page)
+		page++
 	}
 	wg.Wait()
 	return versions, nil
 }
 
 func GetVersions(gamelink string, page int) ([]VersionData, error) {
+	Log.Info(fmt.Sprintf(gamelink, page))
 	resp, err := Client.Get(fmt.Sprintf(gamelink, page))
 	if err != nil {
 		Log.Error(err)

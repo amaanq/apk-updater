@@ -45,10 +45,13 @@ var decompressCmd = &cobra.Command{
 
 		switch {
 		case inputDecompressFP == "" && inputAssetsFP == "": // Default case
+			panic(inputAssetsFP)
 			game, err := selectGame("Which game do you want to download and decompress") // Have user pick a game
 			if err != nil {
 				return err
 			}
+
+			apk.Log.Info(game.URL)
 
 			versions, err := apk.GetAllVersions(game.URL) // Get game versions
 			if err != nil {
@@ -147,7 +150,6 @@ var decompressCmd = &cobra.Command{
 			if outputDecompressFP == "" {
 				outputDecompressFP = strings.TrimSuffix(inputDecompressFP, ".apk") + "-decompressed"
 			}
-
 			assetsFP, err := apk.WalkAndDecompressAssets(game.ValidDirectories, inputAssetsFP, outputDecompressFP)
 			if err != nil {
 				return err
@@ -175,6 +177,10 @@ var decompressCmd = &cobra.Command{
 			}
 			if err != nil {
 				return err
+			}
+
+			if outputDecompressFP == "" {
+				outputDecompressFP = inputAssetsFP + "-decompressed"
 			}
 			assetsFP, err := apk.WalkAndDecompressAssets(game.ValidDirectories, inputAssetsFP, outputDecompressFP)
 			if err != nil {
