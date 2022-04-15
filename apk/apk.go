@@ -106,7 +106,6 @@ func WalkAndDecompressAssets(validDirs []string, fpToDecompiledAPK, fpToOutputFi
 	os.RemoveAll(fpToOutputFiles)
 	err := os.Mkdir(fpToOutputFiles, 0755)
 	if err != nil && !os.IsExist(err) {
-		panic(err)
 		Log.Error(fpToOutputFiles)
 		Log.Error(err)
 		return "", err

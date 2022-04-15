@@ -45,7 +45,6 @@ var decompressCmd = &cobra.Command{
 
 		switch {
 		case inputDecompressFP == "" && inputAssetsFP == "": // Default case
-			panic(inputAssetsFP)
 			game, err := selectGame("Which game do you want to download and decompress") // Have user pick a game
 			if err != nil {
 				return err
@@ -132,7 +131,7 @@ var decompressCmd = &cobra.Command{
 
 			_, err = os.Stat(inputDecompressFP)
 			if errors.Is(err, os.ErrNotExist) {
-				return errors.New("Given APK File does not exist!")
+				return errors.New("given APK File does not exist")
 			}
 			if err != nil {
 				return err
@@ -173,7 +172,7 @@ var decompressCmd = &cobra.Command{
 
 			_, err = os.Stat(inputAssetsFP)
 			if errors.Is(err, os.ErrNotExist) {
-				return errors.New("Given Assets Path does not exist!")
+				return errors.New("given Assets Path does not exist")
 			}
 			if err != nil {
 				return err
