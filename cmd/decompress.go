@@ -1,12 +1,20 @@
 /*
-Copyright © 2022 Amaan Qureshi (aq0527@pm.me)
+The GPLv3 License (GPLv3)
 
-This file is part of the CLI application APK Updater.
+Copyright (c) 2023 Amaan Qureshi <amaanq12@gmail.com>
 
-This project, APK Updater, is not to be redistributed or copied without
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
-the express permission of the copyright holder, Amaan Qureshi (amaanq).
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 package cmd
 
@@ -111,7 +119,7 @@ var decompressCmd = &cobra.Command{
 			}
 
 			if _bool {
-				apk.CleanUp(assetsFP, fp)
+				_ = apk.CleanUp(assetsFP, fp)
 				assetsFP = "decompressed"
 			}
 			apk.Log.Infof("Done! Decompressed assets stored in ./%s\n", assetsFP)
@@ -155,7 +163,7 @@ var decompressCmd = &cobra.Command{
 			}
 			apk.Log.Infof("Assets stored in %s\n", assetsFP)
 			if _bool {
-				apk.CleanUp(assetsFP, inputDecompressFP)
+				_ = apk.CleanUp(assetsFP, inputDecompressFP)
 			}
 		case inputAssetsFP != "":
 			game, err := selectGame("What game is this (needed for knowing what folders to parse..)") // Have user pick a game
@@ -187,7 +195,7 @@ var decompressCmd = &cobra.Command{
 			}
 			apk.Log.Infof("Assets stored in %s\n", assetsFP)
 			if _bool {
-				apk.CleanUp(assetsFP, inputAssetsFP)
+				_ = apk.CleanUp(assetsFP, inputAssetsFP)
 			}
 		}
 		return nil
@@ -196,8 +204,8 @@ var decompressCmd = &cobra.Command{
 
 func selectGame(_prompt string) (*apk.GameLink, error) {
 	templates := &promptui.SelectTemplates{
-		Label: "		{{ . }}?",
-		Active: "		     ↳ {{ .Name | cyan }}",
+		Label:    "		{{ . }}?",
+		Active:   "		     ↳ {{ .Name | cyan }}",
 		Inactive: "			{{ .Name | cyan }}",
 		Selected: "			{{ .Name | red | cyan }}",
 		Details: `
@@ -219,8 +227,8 @@ func selectGame(_prompt string) (*apk.GameLink, error) {
 
 func selectVersion(versions []apk.VersionData) (*apk.VersionData, error) {
 	templates := &promptui.SelectTemplates{
-		Label: "		{{ . }}?",
-		Active: "		     ↳ {{ .Version | cyan }} ({{ .Date | red }})",
+		Label:    "		{{ . }}?",
+		Active:   "		     ↳ {{ .Version | cyan }} ({{ .Date | red }})",
 		Inactive: "			{{ .Version | cyan }} ({{ .Date | red }})",
 		Selected: "			{{ .Version | red | cyan }}",
 		Details: `
