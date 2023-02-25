@@ -1,21 +1,22 @@
 # **A Go package to automatically update your game files!**
-<br/>
 
 ## **Installation**
-### Run one of the following:
+
+### Run one of the following
+
 ```sh
 go build
 ```
-### OR
+
 ```sh
 go run .
 ```
-<br/>
 
-## **Don't have go installed? That's fine, I included prebuilt binaries for you to run, check releases!**
-<br />
+_Don't have go installed? That's fine, I included prebuilt binaries for you to
+run, check the releases page!_
 
 ## Running
+
 ```sh
 ./apk-updater decompress # decompresses with a UI to pick game/version
 
@@ -23,4 +24,5 @@ go run .
 
 ./apk-updater download # download just the apk alone for whatever you want
 ```
+
 ![Decompression](https://i.imgur.com/U2TMpH1.gif)
